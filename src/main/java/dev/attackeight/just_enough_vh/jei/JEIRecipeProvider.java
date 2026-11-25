@@ -289,7 +289,6 @@ public class JEIRecipeProvider {
                         extraInfo
                 );
 
-                // One inner list = one JEI slot
                 slots.add(List.of(formatted));
             }
 
