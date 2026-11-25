@@ -6,11 +6,8 @@
   "refmap": "TheVaultJEI.refmap.json",
   "mixins": [
     "IntegrationJEIMixin",
-    "accessors.DemandEntryAccessor",
-    "accessors.GreedCauldronAccessor",
-    "accessors.GreedTraderConfigAccessor",
-    "IntegrationJEIMixin",
-    "accessors.PlayerGreedTraderDataAccessor",
+    "accessors.BountyBoardRewardsConfigAccessor",
+    "accessors.BountyEntryAccessor",
     "accessors.TradeEntryAccessor"
   ],
   "client": [],

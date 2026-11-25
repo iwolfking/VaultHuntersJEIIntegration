@@ -5,6 +5,8 @@ import dev.attackeight.just_enough_vh.mixin.accessors.*;
 import iskallia.vault.VaultMod;
 import iskallia.vault.config.*;
 import iskallia.vault.block.PlaceholderBlock;
+import iskallia.vault.config.bounty.BountyBoardConfig;
+import iskallia.vault.config.bounty.BountyBoardRewardsConfig;
 import iskallia.vault.config.entry.ChanceItemStackEntry;
 import iskallia.vault.config.entry.ConditionalChanceItemStackEntry;
 import iskallia.vault.config.entry.IntRangeEntry;
@@ -39,7 +41,6 @@ import iskallia.vault.item.gear.RecyclableItem;
 import iskallia.vault.tags.ModItemTags;
 import iskallia.vault.task.ProgressConfiguredTask;
 import iskallia.vault.util.data.WeightedList;
-import iskallia.vault.world.data.PlayerGreedTraderData;
 import mezz.jei.api.recipe.RecipeType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
@@ -208,25 +209,119 @@ public class JEIRecipeProvider {
 
     public static List<LabeledLootInfo> getBountyRewards() {
         List<LabeledLootInfo> toReturn = new ArrayList<>();
-        ModConfigs.REWARD_CONFIG.POOLS.forEach((id, entry) -> {
-            TreeMap<Integer, LabeledLootInfo> lootInfo = new TreeMap<>();
-            if (!id.equals("submission")) {
-                entry.forEach((minLevel, rewards) -> {
-                    AtomicInteger totalWeight = new AtomicInteger();
-                    List<ItemStack> results = new ArrayList<>();
-                    IntRangeEntry vaultExp = rewards.vaultExp;
-                    rewards.getItemPool().getPool().forEach(stack -> totalWeight.addAndGet(stack.weight));
-                    rewards.getItemPool().getPool().forEach(stack ->
-                        results.add(formatItemStack(stack.value.getMatchingStack(), stack.value.getMinCount(),
-                                stack.value.getMaxCount(), stack.weight, totalWeight.get())));
-                    lootInfo.put(minLevel, LabeledLootInfo.of(results,
-                            new TextComponent("Reward Pool: " + id + " Level: " + minLevel + "+"),
-                            new TextComponent("Vault Exp Reward: " + vaultExp.getMin() + "-" + vaultExp.getMax())));
-                });
+        BountyBoardRewardsConfig config = ModConfigs.BOUNTY_BOARD_REWARDS;
+        if (config == null) {
+            return toReturn;
+        }
+
+        BountyBoardRewardsConfigAccessor accessor = (BountyBoardRewardsConfigAccessor) config;
+        Map<VaultGearRarity, List<BountyBoardRewardsConfig.Entry>> rewardsByRarity = accessor.getRewardsByRarity();
+        if (rewardsByRarity == null || rewardsByRarity.isEmpty()) {
+            return toReturn;
+        }
+
+        List<VaultGearRarity> orderedRarities = new ArrayList<>();
+        for (VaultGearRarity rarity : BountyBoardConfig.REWARD_RARITIES) {
+            if (rewardsByRarity.containsKey(rarity)) {
+                orderedRarities.add(rarity);
             }
-            lootInfo.forEach((n,i) -> toReturn.add(i));
-        });
+        }
+        for (VaultGearRarity rarity : rewardsByRarity.keySet()) {
+            if (!orderedRarities.contains(rarity)) {
+                orderedRarities.add(rarity);
+            }
+        }
+
+        for (VaultGearRarity rarity : orderedRarities) {
+            List<BountyBoardRewardsConfig.Entry> entries = rewardsByRarity.get(rarity);
+            if (entries == null || entries.isEmpty()) {
+                continue;
+            }
+
+            int totalWeight = entries.stream()
+                    .filter(Objects::nonNull)
+                    .mapToInt(e -> Math.max(0, e.getWeight()))
+                    .sum();
+
+            List<List<ItemStack>> slots = new ArrayList<>();
+            for (BountyBoardRewardsConfig.Entry entry : entries) {
+                if (entry == null || entry.getWeight() <= 0) {
+                    continue;
+                }
+
+                ItemStack baseStack = entry.getItemStack();
+                if (baseStack == null || baseStack.isEmpty()) {
+                    continue;
+                }
+
+                int minAmount = entry.getMinAmount();
+                int maxAmount = Math.max(minAmount, entry.getMaxAmount());
+
+                BountyEntryAccessor entryAccessor = (BountyEntryAccessor) entry;
+                int minLevel = entryAccessor.getMinLevel();
+                int maxLevel = entryAccessor.getMaxLevel();
+                int minGreedTier = entryAccessor.getMinGreedTier();
+
+                List<String> notes = new ArrayList<>();
+                if (maxLevel >= 0) {
+                    notes.add("Lv " + minLevel + "-" + maxLevel);
+                } else if (minLevel > 0) {
+                    notes.add("Lv " + minLevel + "+");
+                }
+                if (minGreedTier > 0) {
+                    notes.add("Greed " + minGreedTier + "+");
+                }
+                if (entry.scalesWithGreedTier()) {
+                    notes.add("Scales w/ Greed");
+                }
+                if (entry.isIdentified()) {
+                    notes.add("Identified");
+                }
+
+                String extraInfo = notes.isEmpty() ? null : String.join(" • ", notes);
+                ItemStack formatted = formatItemStack(
+                        baseStack.copy(),
+                        minAmount,
+                        maxAmount,
+                        entry.getWeight(),
+                        totalWeight,
+                        null,
+                        extraInfo
+                );
+
+                // One inner list = one JEI slot
+                slots.add(List.of(formatted));
+            }
+
+            if (!slots.isEmpty()) {
+                String rarityName = formatRarityName(rarity);
+                toReturn.add(new LabeledLootInfo(
+                        slots,
+                        new TextComponent("Bounty Reward - " + rarityName),
+                        new TextComponent("Weighted by rarity pool").withStyle(ChatFormatting.DARK_GRAY)
+                ));
+            }
+        }
+
         return toReturn;
+    }
+
+    private static String formatRarityName(VaultGearRarity rarity) {
+        if (rarity == null) {
+            return "Unknown";
+        }
+        String raw = rarity.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        String[] parts = raw.split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (!part.isEmpty()) {
+                if (sb.length() > 0) {
+                    sb.append(' ');
+                }
+                sb.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+            }
+        }
+        return sb.toString();
     }
 
     public static List<LabeledLootInfo> getAltarIngredients() {
@@ -255,23 +350,9 @@ public class JEIRecipeProvider {
         return toReturn;
     }
 
-    public static List<LabeledLootInfo> getGreedCauldronIngredients() {
-        List<LabeledLootInfo> toReturn = new ArrayList<>();
-        GreedCauldronAccessor cauldronConfig = (GreedCauldronAccessor) ModConfigs.GREED_CAULDRON;
-        int totalWeight = cauldronConfig.getDemands().size();
-        List<ItemStack> results = new ArrayList<>();
-        ((GreedCauldronAccessor) ModConfigs.GREED_CAULDRON).getDemands().forEach((demand) -> {
-            ItemStack item = ForgeRegistries.ITEMS.getValue(parseItemId(((DemandEntryAccessor) demand).getItem())).getDefaultInstance();
-            results.add(formatItemStack(item, ((DemandEntryAccessor) demand).getMinAmount(),
-                    ((DemandEntryAccessor) demand).getMaxAmount(), 1, totalWeight, 1));
-        });
-        toReturn.add(LabeledLootInfo.of(results, new TextComponent("All amounts are base values"), new TextComponent(cauldronConfig.getGlobalCoinOutputMin() + "-" + cauldronConfig.getGlobalCoinOutputMax() + " coins per submission")));
-        return toReturn;
-    }
-
     private static ResourceLocation parseItemId(String itemId) {
         int colonIdx = itemId.indexOf(58);
-        return colonIdx >= 0 ? new ResourceLocation(itemId.substring(0, colonIdx), itemId.substring(colonIdx + 1)) : new ResourceLocation(itemId);
+        return colonIdx >= 0 ? ResourceLocation.fromNamespaceAndPath(itemId.substring(0, colonIdx), itemId.substring(colonIdx + 1)) : ResourceLocation.parse(itemId);
     }
 
     public static List<LabeledLootInfo> getMaterialBoxLoot() {
@@ -590,15 +671,15 @@ public class JEIRecipeProvider {
 
     protected static List<LabeledLootInfo> getRuneRewards() {
         List<LabeledLootInfo> lootInfos = new ArrayList<>();
-        String lastTable = null;
-        for (LegacyLootTablesConfig.Level lvlEntry : ModConfigs.LOOT_TABLES.LEVELS) {
-            LootTable lootTable = VaultRegistry.LOOT_TABLE.getKey(lvlEntry.RUNES_LOOT).get(Version.latest());
-            if (lastTable != null && lastTable.equals(lootTable.getPath())) {
-                continue;
-            }
-            lastTable = lootTable.getPath();
-            lootInfos.add(LabeledLootInfo.of(processLegacyLootTable(lootTable), new TextComponent("Level "+lvlEntry.getLevel()+"+") , null));
-        }
+//        String lastTable = null;
+//        for (LegacyLootTablesConfig.Level lvlEntry : ModConfigs.LOOT_TABLES.LEVELS) {
+//            LootTable lootTable = VaultRegistry.LOOT_TABLE.getKey(lvlEntry.RUNES_LOOT).get(Version.latest());
+//            if (lastTable != null && lastTable.equals(lootTable.getPath())) {
+//                continue;
+//            }
+//            lastTable = lootTable.getPath();
+//            lootInfos.add(LabeledLootInfo.of(processLegacyLootTable(lootTable), new TextComponent("Level "+lvlEntry.getLevel()+"+") , null));
+//        }
 
         return lootInfos;
     }
@@ -643,36 +724,48 @@ public class JEIRecipeProvider {
         return recipes;
     }
 
-    public static List<LabeledLootInfo> getGreedTrades() {
-        List<LabeledLootInfo> recipes = new ArrayList<>();
-
-        var rand = new Random();
-        Map<Integer, List<GreedTraderConfig.TradeEntry>> pools = ((GreedTraderConfigAccessor)ModConfigs.GREED_TRADER).getTierPools();
-        List<Integer> greedTiers = pools.keySet().stream().sorted().toList();
-        for (Integer greedTier : greedTiers) {
-            List<GreedTraderConfig.TradeEntry> availableEntries = pools.get(greedTier);
-            int totalWeight = availableEntries.stream().mapToInt(GreedTraderConfig.TradeEntry::getWeight).sum();
-            List<List<ItemStack>> stacks = new ArrayList<>();
-            for(GreedTraderConfig.TradeEntry entry : pools.get(greedTier)) {
-                List<ItemStack> randomRolls = new ArrayList<>();
-                int realMaxAmount = entry.getMinAmount() + Math.max(1, entry.getMaxAmount() - entry.getMinAmount() + 1); // wtf vh
-                var tradeEntryA = (TradeEntryAccessor) entry;
-                int realMaxCost = tradeEntryA.getMinCoinCost() + Math.max(1, tradeEntryA.getMaxCoinCost() - tradeEntryA.getMinCoinCost() + 1);
-                for (int i = 0; i < 10; i++) { // roll 10 items to make it obvious you can for different etchings and stuff
-                    PlayerGreedTraderData.TradeOffer offer = ((PlayerGreedTraderDataAccessor)new PlayerGreedTraderData()).callRollSingleOffer(entry, greedTier, ModConfigs.GREED_TRADER, rand, 100);
-                    if (offer != null) {
-                        randomRolls.add(formatItemStack(offer.createItemStack(), entry.getMinAmount(), realMaxAmount, entry.getWeight(), totalWeight, null, "Cost: " + tradeEntryA.getMinCoinCost() + "-" + realMaxCost));
-                    }
-                }
-                if (!randomRolls.isEmpty()) {
-                    stacks.add(randomRolls);
-                }
-            }
-            recipes.add(new LabeledLootInfo(stacks, new TextComponent("Greed Trade - Greed tier " + greedTier + "+"), new TextComponent("lower tier item can also appear").withStyle(ChatFormatting.DARK_GRAY)));
+    private static ItemStack createPreviewStack(GreedTraderConfig.TradeEntry entry, int greedTier, Random rand) {
+        if (entry.isRandomEtching()) {
+            ItemStack base = entry.getItemStack();
+            return base != null && !base.isEmpty() ? base.copy() : ItemStack.EMPTY;
         }
 
+        ItemStack base = entry.getItemStack();
+        if (base != null && !base.isEmpty()) {
+            return base.copy();
+        }
 
-        return recipes;
+        String poolId = entry.getPoolId();
+        if (poolId != null && !poolId.isEmpty()) {
+            List<GreedTraderConfig.PoolEntry> poolEntries = ModConfigs.GREED_TRADER.getPoolEntries(poolId, greedTier);
+            GreedTraderConfig.PoolEntry chosen = pickWeightedPoolEntry(poolEntries, rand);
+            if (chosen != null) {
+                if ("item".equals(chosen.getType()) && chosen.getItemStack() != null && !chosen.getItemStack().isEmpty()) {
+                    return chosen.getItemStack().copy();
+                }
+            }
+        }
+
+        return ItemStack.EMPTY;
+    }
+
+    @Nullable
+    private static GreedTraderConfig.PoolEntry pickWeightedPoolEntry(List<GreedTraderConfig.PoolEntry> entries, Random rand) {
+        if (entries == null || entries.isEmpty()) {
+            return null;
+        }
+        int totalWeight = entries.stream().mapToInt(e -> Math.max(0, e.getWeight())).sum();
+        if (totalWeight <= 0) {
+            return null;
+        }
+        int roll = rand.nextInt(totalWeight);
+        for (GreedTraderConfig.PoolEntry entry : entries) {
+            roll -= Math.max(0, entry.getWeight());
+            if (roll < 0) {
+                return entry;
+            }
+        }
+        return entries.get(entries.size() - 1);
     }
 
     private static List<ItemStack> processLootTableEntry(LootTable.Entry entry, @Nullable String rollText) {

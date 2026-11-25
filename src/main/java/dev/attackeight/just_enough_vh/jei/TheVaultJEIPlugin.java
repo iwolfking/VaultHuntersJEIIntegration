@@ -68,7 +68,6 @@ public class TheVaultJEIPlugin implements IModPlugin {
     // Optional
     public static final RecipeType<LootInfo> MYSTERY_BOX = RecipeType.create(JustEnoughVH.ID, "mystery_box", LootInfo.class);
     public static final RecipeType<LabeledLootInfo> MATERIAL_BOX = RecipeType.create(JustEnoughVH.ID, "material_box", LabeledLootInfo.class);
-    // public static final RecipeType<LootInfo> PANDORAS_BOX = RecipeType.create(JustEnoughVH.ID, "pandoras_box", LootInfo.class);
 
     // Vault Additions
     public static final RecipeType<LabeledLootInfo> VA_ARENA_STATUE = RecipeType.create(JustEnoughVH.ID, "va_arena_statue", LabeledLootInfo.class);
@@ -109,7 +108,6 @@ public class TheVaultJEIPlugin implements IModPlugin {
 
         if (ModConfig.shouldShow()) {
             registration.addRecipeCatalyst(new ItemStack(ModItems.MYSTERY_BOX), MYSTERY_BOX);
-            // registration.addRecipeCatalyst(new ItemStack(ModItems.PANDORAS_BOX), PANDORAS_BOX);
             registration.addRecipeCatalyst(new ItemStack(ModItems.MATERIAL_BOX), MATERIAL_BOX);
         }
 
@@ -145,7 +143,6 @@ public class TheVaultJEIPlugin implements IModPlugin {
         registration.addRecipeCategories(makeLabeledLootInfoCategory(guiHelper, CHAMPION_LOOT, ModItems.SCAVENGER_TREASURE_GOBLET, new TextComponent("Champion Loot")));
         registration.addRecipeCategories(makeLabeledLootInfoCategory(guiHelper, RUNE_REWARDS, ModItems.BOSS_RUNE, new TextComponent("Rune Rewards")));
         registration.addRecipeCategories(makeLabeledLootInfoCategory(guiHelper, ROYALE_LOOT, ModBlocks.ROYALE_CRATE, new TextComponent("Royale Loot")));
-        registration.addRecipeCategories(makeLabeledLootInfoCategory(guiHelper, GREED_TRADER, ModBlocks.GREEDY_ANCHOR, new TextComponent("Greed Trader")));
 
         LootInfoGroupDefinitionRegistry.get().forEach((location, groupDefinition) ->
                 registration.addRecipeCategories(makeLabeledLootInfoCategory(guiHelper,
@@ -153,7 +150,6 @@ public class TheVaultJEIPlugin implements IModPlugin {
 
         if (ModConfig.shouldShow()) {
             registration.addRecipeCategories(makeLootInfoCategory(guiHelper, MYSTERY_BOX, ModItems.MYSTERY_BOX));
-            // registration.addRecipeCategories(makeLootInfoCategory(guiHelper, PANDORAS_BOX, ModItems.PANDORAS_BOX));
             registration.addRecipeCategories(makeLabeledLootInfoCategory(guiHelper, MATERIAL_BOX, ModItems.MATERIAL_BOX));
         }
         if (JustEnoughVH.vaLoaded()) {
@@ -185,7 +181,6 @@ public class TheVaultJEIPlugin implements IModPlugin {
         registration.addRecipes(BOUNTY_REWARDS, getBountyRewards());
         registration.addRecipes(SHOP_PEDESTAL, getShopPedestalLoot());
         registration.addRecipes(ALTAR_INGREDIENTS, getAltarIngredients());
-        registration.addRecipes(GREED_CAULDRON_INGREDIENTS, getGreedCauldronIngredients());
         registration.addRecipes(VAULT_RECYCLER, getRecyclerRecipes());
         registration.addRecipes(CHALLENGE_ACTION_LOOT, getChallengeActionLoot());
         registration.addRecipes(CHAMPION_LOOT, getChampionLoot());
@@ -193,7 +188,6 @@ public class TheVaultJEIPlugin implements IModPlugin {
         registration.addRecipes(DRAGON_GOBLINS, getDragonGoblinDrops());
         registration.addRecipes(RUNE_REWARDS, getRuneRewards());
         registration.addRecipes(ROYALE_LOOT, getRoyaleLoot());
-        registration.addRecipes(GREED_TRADER, getGreedTrades());
 
         LootInfoGroupDefinitionRegistry.get().forEach((location, groupDefinition) ->
             registration.addRecipes(adapt(groupDefinition.recipeType()), labelDefaultLootInfo(location)));
